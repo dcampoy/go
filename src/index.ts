@@ -1,3 +1,4 @@
+import { winningChance } from "./engine/Score"
 import { GameState, Position } from "./engine/State"
 import {
   board,
@@ -136,6 +137,12 @@ init(root).then(([drawingState, canvas]) => {
     gameState = gameState.move(pos)
 
     render(drawingState, gameState, pos)
+  })
+
+  window.addEventListener("keypress", (ev) => {
+    if (ev.code === "KeyS") {
+      console.log(winningChance(gameState))
+    }
   })
 
   render(drawingState, gameState, null)
