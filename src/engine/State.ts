@@ -406,4 +406,17 @@ export class GameState {
     }
     return c
   }
+  public numberOfWhiteStones() {
+    let c = 0
+    for (let i = 0; i < this.board.length; i++) {
+      if (this.board[i] === "white") {
+        c++
+      }
+    }
+    return c
+  }
+
+  public undo() {
+    return this.prev
+  }
 }

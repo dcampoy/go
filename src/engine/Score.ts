@@ -6,7 +6,7 @@ export function simulate(state: GameState) {
   let c = 0
   while (true) {
     c++
-    if (c > 500) {
+    if (c > 100) {
       break
     }
     if (positions.length === 0) {
@@ -39,17 +39,19 @@ export function simulate(state: GameState) {
   return state
 }
 
-export function winningChance(state: GameState) {
-  let w = 0
-  let total = 0
+export function score(state: GameState) {
+  let results: number[] = []
   for (let k = 0; k < 1000; k++) {
-    if (
-      simulate(state).numberOfBlackStones() >
-      (state.boardSize * state.boardSize) / 2
-    ) {
-      w++
-    }
-    total++
+    const sim = simulate(state)
+    const blackStones = sim.numberOfBlackStones()
+    const whiteStones = sim.numberOfWhiteStones()
+    results.push(blackStones - whiteStones)
   }
-  return ((100 * w) / total).toFixed(2)
+
+  const blackWins = results.filter((v) => v > 0).length
+  const total = results.length
+
+  return {
+    blackWinningChances: ((100 * blackWins) / total).toFixed(2),
+  }
 }
