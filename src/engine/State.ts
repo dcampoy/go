@@ -1,3 +1,5 @@
+import { Game } from "./Game"
+
 type BoardValue = "black" | "white" | null
 
 // 0-based E.g. 1-1 is {x:0, y:0}
@@ -8,7 +10,7 @@ export type Position = {
 
 export class GameState {
   private board: BoardValue[]
-  private prev: GameState | null = null
+  // private prev: GameState | null = null
 
   constructor(public boardSize: number, public turn: "black" | "white") {
     this.board = new Array(boardSize * boardSize).fill(null)
@@ -44,16 +46,10 @@ export class GameState {
     return this.board[index]
   }
 
-  public isKo() {
+  public isKo(game: Game) {
     const currentFingerPrint = this.fingerPrint()
-    let prevGame = this.prev
-    for (let i = 0; i < 8 && prevGame !== null; i++) {
-      if (prevGame.fingerPrint() === currentFingerPrint) {
-        return true
-      }
-      prevGame = prevGame.prev
-    }
-    return false
+    const koState = game.findMovementByFingerPrint(currentFingerPrint)
+    return koState !== null
   }
 
   public isSuicide() {
@@ -321,11 +317,10 @@ export class GameState {
 
     nextMove.turn = this.turn === "black" ? "white" : "black"
     nextMove.removeDeadGroups()
-    nextMove.prev = this
     return nextMove
   }
 
-  public isValidMove(pos: Position | null) {
+  public isValidMove(pos: Position | null, game: Game | null) {
     // Pass is always allowed
     if (!pos) {
       return true
@@ -341,7 +336,7 @@ export class GameState {
 
     const newState = this.move(pos)
 
-    if (newState.isKo()) {
+    if (game && newState.isKo(game)) {
       return false
     }
 
@@ -414,9 +409,5 @@ export class GameState {
       }
     }
     return c
-  }
-
-  public undo() {
-    return this.prev
   }
 }

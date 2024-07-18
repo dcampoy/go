@@ -1,5 +1,6 @@
 import { score } from "./engine/Score"
-import { GameState, Position } from "./engine/State"
+import { Position } from "./engine/State"
+import { Game } from "./engine/Game"
 import {
   board,
   boardSize,
@@ -66,18 +67,20 @@ async function init(
 let lastRenderFingerPrint: string | null = null
 function render(
   drawingState: DrawingState,
-  state: GameState,
+  game: Game,
   hoverStone: Position | null
 ) {
+  const gameState = game.getCurrentGameState()
   const renderFingerprint =
-    state.fingerPrint() + (hoverStone ? `${hoverStone.x}.${hoverStone.y}` : "")
+    gameState.fingerPrint() +
+    (hoverStone ? `${hoverStone.x}.${hoverStone.y}` : "")
 
   if (lastRenderFingerPrint === renderFingerprint) return
   lastRenderFingerPrint = renderFingerprint
 
   renderBoard(drawingState)
 
-  state.getAllElements().forEach((element) => {
+  gameState.getAllElements().forEach((element) => {
     const { x, y } = element.pos
     if (element.value === "black") {
       renderStone(drawingState, "black", { x, y }, false)
@@ -89,8 +92,8 @@ function render(
   })
 
   if (hoverStone) {
-    if (state.isValidMove(hoverStone)) {
-      renderStone(drawingState, state.turn, hoverStone, true)
+    if (gameState.isValidMove(hoverStone, game)) {
+      renderStone(drawingState, gameState.turn, hoverStone, true)
     }
   }
 }
@@ -102,7 +105,7 @@ if (!root) {
 }
 
 init(root).then(([drawingState, canvas]) => {
-  let gameState = new GameState(board, "black")
+  const game = new Game(board)
 
   canvas.addEventListener("mousemove", (ev) => {
     const pos = {
@@ -110,11 +113,11 @@ init(root).then(([drawingState, canvas]) => {
       y: Math.floor((ev.offsetY - unit / 2) / unit),
     }
 
-    if (!gameState.isPositionValid(pos)) {
+    if (!game.getCurrentGameState().isPositionValid(pos)) {
       return
     }
 
-    render(drawingState, gameState, pos)
+    render(drawingState, game, pos)
   })
 
   // Controller
@@ -130,28 +133,34 @@ init(root).then(([drawingState, canvas]) => {
       return
     }
 
-    if (!gameState.isValidMove(pos)) {
+    if (!game.getCurrentGameState().isValidMove(pos, game)) {
       return
     }
 
-    gameState = gameState.move(pos)
+    game.registerMove(pos)
 
-    render(drawingState, gameState, pos)
+    render(drawingState, game, pos)
   })
 
   window.addEventListener("keyup", (ev) => {
     if (ev.code === "KeyS") {
-      console.log(score(gameState))
+      console.log(score(game.getCurrentGameState()))
+    }
+
+    if (ev.code === "KeyE") {
+      console.log(game.exportToNN())
     }
 
     if (ev.code === "ArrowLeft") {
-      const prev = gameState.undo()
-      if (prev) {
-        gameState = prev
-        render(drawingState, gameState, null)
-      }
+      game.undo()
+      render(drawingState, game, null)
+    }
+
+    if (ev.code === "ArrowRight") {
+      game.redo()
+      render(drawingState, game, null)
     }
   })
 
-  render(drawingState, gameState, null)
+  render(drawingState, game, null)
 })
