@@ -9,6 +9,7 @@ export function simulate(state: GameState) {
     if (c > 100) {
       break
     }
+
     if (positions.length === 0) {
       state = state.move(null)
       if (pass) {
@@ -16,12 +17,13 @@ export function simulate(state: GameState) {
       } else {
         pass = true
         positions = state.getEmptyPositions()
+        continue
       }
     }
 
     const i = Math.floor(Math.random() * positions.length)
 
-    if (!state.isValidMove(positions[i])) {
+    if (!state.isValidMove(positions[i], null)) {
       positions = positions.slice(0, i).concat(positions.slice(i + 1))
       continue
     }
@@ -41,7 +43,7 @@ export function simulate(state: GameState) {
 
 export function score(state: GameState) {
   let results: number[] = []
-  for (let k = 0; k < 1000; k++) {
+  for (let k = 0; k < 100; k++) {
     const sim = simulate(state)
     const blackStones = sim.numberOfBlackStones()
     const whiteStones = sim.numberOfWhiteStones()

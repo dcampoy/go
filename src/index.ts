@@ -65,35 +65,63 @@ async function init(
 }
 
 let lastRenderFingerPrint: string | null = null
+
 function render(
   drawingState: DrawingState,
   game: Game,
-  hoverStone: Position | null
+  hoverStone: {
+    pos: Position | null
+    isValidMove: boolean
+  }
 ) {
   const gameState = game.getCurrentGameState()
+
   const renderFingerprint =
     gameState.fingerPrint() +
-    (hoverStone ? `${hoverStone.x}.${hoverStone.y}` : "")
+    (hoverStone
+      ? `${hoverStone.pos.x}.${hoverStone.pos.y} ${hoverStone.isValidMove}`
+      : "")
 
   if (lastRenderFingerPrint === renderFingerprint) return
+
   lastRenderFingerPrint = renderFingerprint
 
   renderBoard(drawingState)
 
+  const hoverGroup = hoverStone && gameState.getBoardValue(hoverStone.pos).group
+  const liberties = hoverGroup
+    ? gameState.calculateLiberties(hoverGroup).length
+    : null
+
   gameState.getAllElements().forEach((element) => {
     const { x, y } = element.pos
-    if (element.value === "black") {
-      renderStone(drawingState, "black", { x, y }, false)
+
+    const group = gameState.getBoardValue(element.pos)?.group
+
+    if (element.value.colour === "black") {
+      renderStone(
+        drawingState,
+        "black",
+        { x, y },
+        false,
+        group === hoverGroup ? liberties : null
+      )
     }
 
-    if (element.value === "white") {
-      renderStone(drawingState, "white", { x, y }, false)
+    if (element.value.colour === "white") {
+      renderStone(
+        drawingState,
+        "white",
+        { x, y },
+        false,
+        group === hoverGroup ? liberties : null
+      )
     }
   })
 
   if (hoverStone) {
-    if (gameState.isValidMove(hoverStone, game)) {
-      renderStone(drawingState, gameState.turn, hoverStone, true)
+    if (hoverStone.isValidMove) {
+      renderStone(drawingState, gameState.turn, hoverStone.pos, true, null)
     }
   }
 }
@@ -113,11 +141,13 @@ init(root).then(([drawingState, canvas]) => {
       y: Math.floor((ev.offsetY - unit / 2) / unit),
     }
 
-    if (!game.getCurrentGameState().isPositionValid(pos)) {
+    if (!game.getCurrentGameState().isPositionWithinBoundaries(pos)) {
       return
     }
 
-    render(drawingState, game, pos)
+    const isValidMove = game.getCurrentGameState().isValidMove(pos, game)
+
+    render(drawingState, game, { pos, isValidMove })
   })
 
   // Controller
@@ -139,7 +169,7 @@ init(root).then(([drawingState, canvas]) => {
 
     game.registerMove(pos)
 
-    render(drawingState, game, pos)
+    render(drawingState, game, null)
   })
 
   window.addEventListener("keyup", (ev) => {
@@ -149,6 +179,11 @@ init(root).then(([drawingState, canvas]) => {
 
     if (ev.code === "KeyE") {
       console.log(game.exportToNN())
+    }
+
+    if (ev.code === "KeyP") {
+      game.registerMove(null)
+      render(drawingState, game, null)
     }
 
     if (ev.code === "ArrowLeft") {

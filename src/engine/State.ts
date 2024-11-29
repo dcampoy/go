@@ -1,6 +1,11 @@
 import { Game } from "./Game"
 
-type BoardValue = "black" | "white" | null
+type Group = number
+
+type BoardValue = {
+  colour: "black" | "white" | null
+  group: Group | null
+}
 
 // 0-based E.g. 1-1 is {x:0, y:0}
 export type Position = {
@@ -10,13 +15,20 @@ export type Position = {
 
 export class GameState {
   private board: BoardValue[]
-  // private prev: GameState | null = null
 
   constructor(public boardSize: number, public turn: "black" | "white") {
-    this.board = new Array(boardSize * boardSize).fill(null)
+    this.board = new Array(boardSize * boardSize).fill({
+      colour: null,
+      group: null,
+    })
   }
 
-  public isPositionValid(pos: Position) {
+  /**
+   * Determines if a position is within the board boundaries.
+   * @param Position pos
+   * @returns boolean
+   */
+  public isPositionWithinBoundaries(pos: Position) {
     return !(
       pos.x < 0 ||
       pos.x >= this.boardSize ||
@@ -25,249 +37,249 @@ export class GameState {
     )
   }
 
-  public set(pos: Position, value: "black" | "white" | null) {
-    if (!this.isPositionValid(pos)) {
-      throw new Error(`Invalid position ${pos}`)
+  private topPositionIndex(index: number): number | null {
+    const y = Math.floor(index / this.boardSize)
+    if (y === 0) return null
+    return index - this.boardSize
+  }
+
+  private rightPositionIndex(index: number): number | null {
+    const x = index % this.boardSize
+    if (x === this.boardSize - 1) return null
+    return index + 1
+  }
+
+  private bottomPositionIndex(index: number): number | null {
+    const y = Math.floor(index / this.boardSize)
+    if (y === this.boardSize - 1) return null
+    return index + this.boardSize
+  }
+
+  private leftPositionIndex(index: number): number | null {
+    const x = index % this.boardSize
+    if (x === 0) return null
+    return index - 1
+  }
+
+  /**
+   * Sets a value to a position on the board.
+   *
+   * @throws Error if the position is out of boundaries or already occupied
+   * @param Position pos
+   * @param colour "black" | "white"
+   */
+  public set(pos: Position, colour: "black" | "white") {
+    if (!this.isPositionWithinBoundaries(pos)) {
+      throw new Error(`Invalid position (${pos.x},${pos.y})`)
     }
 
     const index = pos.y * this.boardSize + pos.x
-    if (this.board[index] !== null) {
-      throw new Error(`Position ${pos} occupied by ${this.board[index]}`)
+    if (this.board[index].colour !== null) {
+      throw new Error(
+        `Position (${pos.x},${pos.y}) occupied by a ${this.board[index].colour} stone`
+      )
     }
 
-    this.board[index] = value
+    this.board[index] = { colour, group: index }
+
+    const adyacentGroupsWithSameColour = [
+      this.topPositionIndex(index),
+      this.rightPositionIndex(index),
+      this.leftPositionIndex(index),
+      this.bottomPositionIndex(index),
+    ]
+      .filter((p) => p !== null)
+      .map((p) => this.board[p])
+      .filter((p) => p.colour === colour)
+      .map((p) => p.group) as number[]
+
+    const canonicalGroupId = Math.min(...adyacentGroupsWithSameColour, index)
+    const groupsToMerge = [...adyacentGroupsWithSameColour, index].filter(
+      (g) => g !== canonicalGroupId
+    )
+
+    for (let i = 0; i < this.board.length; i++) {
+      const groupAtI = this.board[i].group
+      if (groupAtI && groupsToMerge.includes(groupAtI)) {
+        this.board[i].group = canonicalGroupId
+      }
+    }
   }
 
-  public get(pos: Position): BoardValue {
-    if (!this.isPositionValid(pos)) {
-      throw new Error(`Invalid position ${pos}`)
+  public removeStone(pos: Position) {
+    const index = pos.y * this.boardSize + pos.x
+    const group = this.board[index].group
+    const colour = this.board[index].colour
+
+    this.board[index] = { colour: null, group: null }
+
+    if (group) {
+      for (let i = 0; i < this.board.length; i++) {
+        if (this.board[i].group === group) {
+          const top = this.topPositionIndex(i)
+          const groupAtTop =
+            top && this.board[top].colour === colour
+              ? this.board[top].group
+              : null
+
+          const left = this.leftPositionIndex(i)
+          const groupAtLeft =
+            left && this.board[left].colour === colour
+              ? this.board[left].group
+              : null
+
+          if (groupAtTop === null && groupAtLeft === null) {
+            this.board[i].group = i
+          } else if (groupAtTop !== null && groupAtLeft === null) {
+            this.board[i].group = groupAtTop
+          } else if (groupAtLeft !== null && groupAtTop === null) {
+            this.board[i].group = groupAtLeft
+          } else if (
+            groupAtTop !== null &&
+            groupAtLeft !== null &&
+            groupAtTop !== groupAtLeft
+          ) {
+            const canonical = Math.min(groupAtTop, groupAtLeft)
+            const toRemove = Math.max(groupAtTop, groupAtLeft)
+            this.board[i].group = canonical
+            for (let j = 0; j < this.board.length; j++) {
+              if (this.board[j].group === toRemove) {
+                this.board[j].group = canonical
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Gets the value of a position on the board.
+   *
+   * @throws Error if the position is out of boundaries
+   * @param Position pos
+   * @returns "black" | "white" | null if empty
+   */
+  public get(pos: Position): BoardValue["colour"] {
+    if (!this.isPositionWithinBoundaries(pos)) {
+      throw new Error(`Invalid position (${pos.x},${pos.y})`)
+    }
+    const index = pos.y * this.boardSize + pos.x
+    return this.board[index].colour
+  }
+
+  public getBoardValue(pos: Position): BoardValue {
+    if (!this.isPositionWithinBoundaries(pos)) {
+      throw new Error(`Invalid position (${pos.x},${pos.y})`)
     }
     const index = pos.y * this.boardSize + pos.x
     return this.board[index]
   }
 
+  /**
+   * Determines if the current position board was seen before in the game.
+   * @param Game game
+   * @returns boolean
+   */
   public isKo(game: Game) {
     const currentFingerPrint = this.fingerPrint()
     const koState = game.findMovementByFingerPrint(currentFingerPrint)
     return koState !== null
   }
 
-  public isSuicide() {
-    const currentFingerPrint = this.fingerPrint()
-    const stateAfterPass = this.move(null)
-    if (stateAfterPass.fingerPrint() !== currentFingerPrint) {
-      return true
+  /**
+   * Determines if the current position board contains a group without liberties.
+   * @returns boolean
+   */
+  private containsDeadGroupAt(pos: Position) {
+    const index = pos.y * this.boardSize + pos.x
+    const group = this.board[index].group
+    if (group !== null) {
+      const liberties = this.calculateLiberties(group)
+      if (liberties.length === 0) {
+        return true
+      }
     }
-
     return false
   }
 
-  public removeDeadGroups() {
-    // TODO To recalculate group information each time is inefficient.
-    const groups = new Array(this.boardSize * this.boardSize).fill(null)
-    let nextGroupId = 1
-    const allGroups = new Set<number>()
+  public calculateLiberties(group: number) {
+    const liberties = new Set<number>()
     for (let i = 0; i < this.board.length; i++) {
-      const x = i % this.boardSize
-      const y = Math.floor(i / this.boardSize)
-      const leftGroup = x > 0 ? groups[i - 1] : null
-      const upperGroup = y > 0 ? groups[i - this.boardSize] : null
-
-      if (this.board[i] === this.turn) {
-        if (leftGroup === null && upperGroup === null) {
-          allGroups.add(nextGroupId)
-          groups[i] = nextGroupId++
-        } else if (leftGroup === upperGroup) {
-          groups[i] = leftGroup
-        } else if (upperGroup === null) {
-          groups[i] = leftGroup
-        } else if (leftGroup === null) {
-          groups[i] = upperGroup
-        } else if (leftGroup !== null && upperGroup !== null) {
-          // Merge groups
-          const canonical = Math.min(leftGroup, upperGroup)
-          const toRemove = Math.max(leftGroup, upperGroup)
-          groups[i] = leftGroup
-          for (let j = 0; j < groups.length; j++) {
-            if (groups[j] === toRemove) {
-              groups[j] = canonical
-            }
-          }
-          allGroups.delete(toRemove)
-        } else {
-          throw new Error("Unreachable")
+      if (this.board[i].colour === null) {
+        const top = this.topPositionIndex(i)
+        if (top !== null && this.board[top].group === group) {
+          liberties.add(i)
+        }
+        const left = this.leftPositionIndex(i)
+        if (left !== null && this.board[left].group === group) {
+          liberties.add(i)
+        }
+        const bottom = this.bottomPositionIndex(i)
+        if (bottom !== null && this.board[bottom].group === group) {
+          liberties.add(i)
+        }
+        const right = this.rightPositionIndex(i)
+        if (right !== null && this.board[right].group === group) {
+          liberties.add(i)
         }
       }
     }
+    return [...liberties]
+  }
 
-    const groupsWithAtLeastOneLiberty = new Set<number>()
-    for (let i = 0; i < this.board.length; i++) {
-      const x = i % this.boardSize
-      const y = Math.floor(i / this.boardSize)
+  /**
+   * Removes dead groups from the board.
+   */
+  private removeDeadGroupsAround(pos: Position) {
+    // Get all existing groups
+    const opponentColour = this.turn === "black" ? "white" : "black"
+    const index = pos.y * this.boardSize + pos.x
+    const opponentGroups = [
+      this.topPositionIndex(index),
+      this.rightPositionIndex(index),
+      this.leftPositionIndex(index),
+      this.bottomPositionIndex(index),
+    ]
+      .filter((p) => p !== null)
+      .map((p) => this.board[p])
+      .filter((v) => v.colour === opponentColour)
+      .map((v) => v.group)
 
-      if (this.board[i] === null) {
-        const leftGroup = x > 0 ? groups[i - 1] : null
-        if (leftGroup) {
-          groupsWithAtLeastOneLiberty.add(leftGroup)
-        }
-        const rightGroup = x < this.boardSize - 1 ? groups[i + 1] : null
-        if (rightGroup) {
-          groupsWithAtLeastOneLiberty.add(rightGroup)
-        }
-        const upperGroup = y > 0 ? groups[i - this.boardSize] : null
-        if (upperGroup) {
-          groupsWithAtLeastOneLiberty.add(upperGroup)
-        }
-        const lowerGroup =
-          y < this.boardSize - 1 ? groups[i + this.boardSize] : null
-        if (lowerGroup) {
-          groupsWithAtLeastOneLiberty.add(lowerGroup)
-        }
-      }
-    }
-
-    allGroups.forEach((g) => {
-      if (!groupsWithAtLeastOneLiberty.has(g)) {
+    for (const group of opponentGroups) {
+      const liberties = this.calculateLiberties(group)
+      if (liberties.length === 0) {
         for (let i = 0; i < this.board.length; i++) {
-          if (groups[i] === g) {
-            this.board[i] = null
-          }
-        }
-      }
-    })
-  }
-
-  public identifyGroups(): [[x: number, y: number], number][] {
-    const groups = new Array(this.boardSize * this.boardSize).fill(null)
-    for (let i = 0; i < this.board.length; i++) {
-      const x = i % this.boardSize
-      const y = Math.floor(i / this.boardSize)
-      const leftGroup = x > 0 ? groups[i - 1] : null
-      const upperGroup = y > 0 ? groups[i - this.boardSize] : null
-
-      if (this.board[i] === this.turn) {
-        if (leftGroup === null && upperGroup === null) {
-          groups[i] = i
-        } else if (leftGroup === upperGroup) {
-          groups[i] = upperGroup
-        } else if (upperGroup === null) {
-          groups[i] = leftGroup
-        } else if (leftGroup === null) {
-          groups[i] = upperGroup
-        } else if (leftGroup !== null && upperGroup !== null) {
-          const canonical = Math.min(leftGroup, upperGroup)
-          const toRemove = Math.max(leftGroup, upperGroup)
-          groups[i] = leftGroup
-          for (let j = 0; j < groups.length; j++) {
-            if (groups[j] === toRemove) {
-              groups[j] = canonical
-            }
-          }
-        } else {
-          throw new Error("Unreachable")
-        }
-      }
-    }
-
-    const libertyCounts = new Map<number, number>()
-    for (let i = 0; i < this.board.length; i++) {
-      const x = i % this.boardSize
-      const y = Math.floor(i / this.boardSize)
-      const visited = new Set<number>()
-
-      if (this.board[i] === null) {
-        const leftGroup = x > 0 ? groups[i - 1] : null
-        if (leftGroup) {
-          if (!visited.has(leftGroup)) {
-            libertyCounts.set(
-              leftGroup,
-              (libertyCounts.get(leftGroup) || 0) + 1
-            )
-            visited.add(leftGroup)
-          }
-        }
-        const rightGroup = x < this.boardSize - 1 ? groups[i + 1] : null
-        if (rightGroup) {
-          if (!visited.has(rightGroup)) {
-            libertyCounts.set(
-              rightGroup,
-              (libertyCounts.get(rightGroup) || 0) + 1
-            )
-            visited.add(rightGroup)
-          }
-        }
-
-        const upperGroup = y > 0 ? groups[i - this.boardSize] : null
-        if (upperGroup) {
-          if (!visited.has(upperGroup)) {
-            libertyCounts.set(
-              upperGroup,
-              (libertyCounts.get(upperGroup) || 0) + 1
-            )
-            visited.add(upperGroup)
-          }
-        }
-
-        const lowerGroup =
-          y < this.boardSize - 1 ? groups[i + this.boardSize] : null
-        if (lowerGroup) {
-          if (!visited.has(lowerGroup)) {
-            libertyCounts.set(
-              lowerGroup,
-              (libertyCounts.get(lowerGroup) || 0) + 1
-            )
-            visited.add(lowerGroup)
+          if (this.board[i].group === group) {
+            this.board[i].colour = null
+            this.board[i].group = null
           }
         }
       }
     }
-
-    // TODO Process libertyCounts to return <Pos> => libertyCounts
-    return [...libertyCounts.entries()].map(([i, lib]) => {
-      const x = i % this.boardSize
-      const y = Math.floor(i / this.boardSize)
-      return [[x, y], lib]
-    })
   }
 
+  /**
+   * Determines if a position is an eye.
+   *
+   * A position is an eye when it is empty and there are surrounded by stones of the same colour.
+   * When the position is not on the edge or the corner, it may have at most one enemy stone on the diagonal.
+   *
+   *   Eye on the corner        Eye on the edge        Eye in the middle
+   *      e●•                      ●••                    •●○
+   *      ●••                      e●•                    ●e●
+   *      •••                      ●••                    •●•
+   *
+   * @param Position pos
+   * @returns boolean
+   */
   public isEye(pos: Position) {
     let enemyOnDiagonal = false
-    // Upper left
-    if (pos.x > 0 && pos.y > 0) {
-      const index = (pos.y - 1) * this.boardSize + (pos.x - 1)
-      if (this.board[index] !== null && this.board[index] !== this.turn) {
-        enemyOnDiagonal = true
-      }
-    }
-
-    // Left
-    if (pos.x > 0) {
-      const index = pos.y * this.boardSize + (pos.x - 1)
-      if (this.board[index] !== this.turn) {
-        return false
-      }
-    }
-
-    // Lower left
-    if (pos.x > 0 && pos.y < this.boardSize - 1) {
-      const index = (pos.y + 1) * this.boardSize + (pos.x - 1)
-      if (this.board[index] !== null && this.board[index] !== this.turn) {
-        enemyOnDiagonal = true
-      }
-    }
 
     // Up
     if (pos.y > 0) {
-      const index = (pos.y - 1) * this.boardSize
-      if (this.board[index] !== this.turn) {
-        return false
-      }
-    }
-
-    // Down
-    if (pos.y < this.boardSize - 1) {
-      const index = (pos.y + 1) * this.boardSize
-      if (this.board[index] !== this.turn) {
+      const index = (pos.y - 1) * this.boardSize + pos.x
+      if (this.board[index].colour !== this.turn) {
         return false
       }
     }
@@ -275,23 +287,67 @@ export class GameState {
     // Upper right
     if (pos.x > 0 && pos.y > 0) {
       const index = (pos.y - 1) * this.boardSize + (pos.x + 1)
-      if (this.board[index] !== null && this.board[index] !== this.turn) {
+      if (
+        this.board[index].colour !== null &&
+        this.board[index].colour !== this.turn
+      ) {
         enemyOnDiagonal = true
       }
     }
 
     // Right
-    if (pos.x > 0) {
+    if (pos.x < this.boardSize - 1) {
       const index = pos.y * this.boardSize + (pos.x + 1)
-      if (this.board[index] !== this.turn) {
+      if (this.board[index].colour !== this.turn) {
         return false
       }
     }
 
     // Lower right
-    if (pos.x > 0 && pos.y < this.boardSize - 1) {
+    if (pos.x < this.boardSize - 1 && pos.y < this.boardSize - 1) {
       const index = (pos.y + 1) * this.boardSize + (pos.x + 1)
-      if (this.board[index] !== null && this.board[index] !== this.turn) {
+      if (
+        this.board[index].colour !== null &&
+        this.board[index].colour !== this.turn
+      ) {
+        enemyOnDiagonal = true
+      }
+    }
+
+    // Down
+    if (pos.y < this.boardSize - 1) {
+      const index = (pos.y + 1) * this.boardSize + pos.x
+      if (this.board[index].colour !== this.turn) {
+        return false
+      }
+    }
+
+    // Lower left
+    if (pos.x > 0 && pos.y < this.boardSize - 1) {
+      const index = (pos.y + 1) * this.boardSize + (pos.x - 1)
+      if (
+        this.board[index].colour !== null &&
+        this.board[index].colour !== this.turn
+      ) {
+        enemyOnDiagonal = true
+      }
+    }
+
+    // Left
+    if (pos.x > 0) {
+      const index = pos.y * this.boardSize + (pos.x - 1)
+      if (this.board[index].colour !== this.turn) {
+        return false
+      }
+    }
+
+    // Upper left
+    if (pos.x > 0 && pos.y > 0) {
+      const index = (pos.y - 1) * this.boardSize + (pos.x - 1)
+      if (
+        this.board[index] !== null &&
+        this.board[index].colour !== this.turn
+      ) {
         enemyOnDiagonal = true
       }
     }
@@ -309,24 +365,38 @@ export class GameState {
     return true
   }
 
+  /**
+   * Performs a move on the board.
+   *
+   * @param Position | null pos
+   * @returns GameState
+   */
   public move(pos: Position | null) {
     const nextMove = this.clone()
     if (pos !== null) {
       nextMove.set(pos, this.turn)
+      nextMove.removeDeadGroupsAround(pos)
     }
-
     nextMove.turn = this.turn === "black" ? "white" : "black"
-    nextMove.removeDeadGroups()
     return nextMove
   }
 
+  /**
+   * Determines if a move is valid.
+   *
+   * When a game is passed, it checks for ko situations.
+   *
+   * @param Position | null meaning pass
+   * @param Game | null game
+   * @returns boolean
+   */
   public isValidMove(pos: Position | null, game: Game | null) {
     // Pass is always allowed
     if (!pos) {
       return true
     }
 
-    if (!this.isPositionValid(pos)) {
+    if (!this.isPositionWithinBoundaries(pos)) {
       return false
     }
 
@@ -336,19 +406,29 @@ export class GameState {
 
     const newState = this.move(pos)
 
-    if (game && newState.isKo(game)) {
+    // Suicide is not allowed
+    if (newState.containsDeadGroupAt(pos)) {
       return false
     }
 
-    if (newState.isSuicide()) {
+    // Ko is not allowed
+    if (game && newState.isKo(game)) {
       return false
     }
 
     return true
   }
 
-  // An element is any board value but nulls
-  public getAllElements() {
+  /**
+   * Gets all elements on the board.
+   *
+   * @returns { pos: Position; value: Exclude<BoardValue, null> }[]
+   */
+  public getAllElements(): {
+    pos: Position
+    value: Exclude<BoardValue, null>
+  }[] {
+    // TODO DIEGO Think about returning groups information instead
     const elements: { pos: Position; value: Exclude<BoardValue, null> }[] = []
     for (let i = 0; i < this.board.length; i++) {
       const value = this.board[i]
@@ -361,10 +441,15 @@ export class GameState {
     return elements
   }
 
-  public getEmptyPositions() {
+  /**
+   * Gets all empty positions on the board.
+   *
+   * @returns Position[]
+   */
+  public getEmptyPositions(): Position[] {
     const positions: Position[] = []
     for (let i = 0; i < this.board.length; i++) {
-      const value = this.board[i]
+      const value = this.board[i].colour
       if (value === null) {
         const x = i % this.boardSize
         const y = Math.floor(i / this.boardSize)
@@ -374,37 +459,61 @@ export class GameState {
     return positions
   }
 
-  public fingerPrint() {
+  /**
+   * Gets a fingerprint of the current board state.
+   *
+   * @returns string
+   */
+  public fingerPrint(): string {
     let output = ""
     for (let i = 0; i < this.board.length; i++) {
-      if (this.board[i] === "black") output += "●"
-      if (this.board[i] === "white") output += "○"
-      if (this.board[i] === null) output += "•"
+      if (this.board[i].colour === "black") output += "●"
+      if (this.board[i].colour === "white") output += "○"
+      if (this.board[i].colour === null) output += "•"
 
       if (i % this.boardSize === this.boardSize - 1) output += "\n"
     }
     return output
   }
 
-  public clone() {
+  /**
+   * Clones the current board state.
+   *
+   * @returns GameState
+   */
+  public clone(): GameState {
     const cloned = new GameState(this.boardSize, this.turn)
-    cloned.board = [...this.board]
+    cloned.board = this.board.map((v) => ({
+      colour: v.colour,
+      group: v.group,
+    }))
     return cloned
   }
 
-  public numberOfBlackStones() {
+  /**
+   * Gets the number of black stones on the board.
+   *
+   * @returns number
+   */
+  public numberOfBlackStones(): number {
     let c = 0
     for (let i = 0; i < this.board.length; i++) {
-      if (this.board[i] === "black") {
+      if (this.board[i].colour === "black") {
         c++
       }
     }
     return c
   }
-  public numberOfWhiteStones() {
+
+  /**
+   * Gets the number of white stones on the board.
+   *
+   * @returns number
+   */
+  public numberOfWhiteStones(): number {
     let c = 0
     for (let i = 0; i < this.board.length; i++) {
-      if (this.board[i] === "white") {
+      if (this.board[i].colour === "white") {
         c++
       }
     }

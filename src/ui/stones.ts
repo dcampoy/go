@@ -20,7 +20,8 @@ export function renderStone(
   drawingState: DrawingState,
   color: "white" | "black",
   pos: Position,
-  isHover: boolean
+  isHover: boolean,
+  libertyCount: number | null
 ) {
   const texture =
     color === "white"
@@ -41,6 +42,15 @@ export function renderStone(
     stoneSize,
     stoneSize
   )
+  if (libertyCount !== null) {
+    if (color === "white") {
+      drawingState.ctx.fillStyle = "black"
+    } else {
+      drawingState.ctx.fillStyle = "white"
+    }
+    drawingState.ctx.font = "12px Arial"
+    drawingState.ctx.fillText(libertyCount.toString(), x, y)
+  }
   if (isHover) {
     drawingState.ctx.globalAlpha = 1
   }
