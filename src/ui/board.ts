@@ -2,7 +2,7 @@ import { DrawingState } from ".."
 import { Position } from "../engine/State"
 
 export const board = 19 // 9x9, 13x13, etc
-export const lightWood = "#FFECB3"
+export const lightWood = "#FFC876"
 export const boardSize = 800
 export const stoneSize = boardSize / (board + 1)
 export const fontSize = 14

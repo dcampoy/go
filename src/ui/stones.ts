@@ -8,11 +8,14 @@ export async function drawStone(
 ) {
   ctx.beginPath()
   ctx.arc(stoneSize / 2, stoneSize / 2, stoneSize / 2 - 2, 0, 2 * Math.PI)
-  ctx.fillStyle = color
-  ctx.strokeStyle = "black"
-  ctx.lineWidth = 1
+  ctx.fillStyle = color === "white" ? "#FFF" : "#222"
+  if (color === "white") {
+    ctx.strokeStyle = "#888"
+    ctx.lineWidth = 1
+    ctx.stroke()
+  }
   ctx.fill()
-  ctx.stroke()
+
   ctx.closePath()
 }
 
@@ -35,6 +38,10 @@ export function renderStone(
   if (isHover) {
     drawingState.ctx.globalAlpha = 0.4
   }
+  drawingState.ctx.shadowColor = "rgba(0,0,0,0.5)"
+  drawingState.ctx.shadowOffsetX = stoneSize / 15
+  drawingState.ctx.shadowOffsetY = stoneSize / 15
+  drawingState.ctx.shadowBlur = 10
   drawingState.ctx.drawImage(
     texture,
     x - stoneSize / 2,
@@ -42,6 +49,10 @@ export function renderStone(
     stoneSize,
     stoneSize
   )
+  drawingState.ctx.shadowColor = "transparent"
+  drawingState.ctx.shadowOffsetX = 0
+  drawingState.ctx.shadowOffsetY = 0
+  drawingState.ctx.shadowBlur = 0
   if (libertyCount !== null) {
     if (color === "white") {
       drawingState.ctx.fillStyle = "black"
