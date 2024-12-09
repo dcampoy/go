@@ -6,7 +6,11 @@ export class Game {
     []
 
   constructor(public boardSize: number) {
-    this.current = -1
+    this.current = 0
+    this.movements.push({
+      state: new GameState(boardSize, "black"),
+      move: null,
+    })
   }
 
   findMovementByFingerPrint(fingerPrint: string) {
@@ -37,12 +41,7 @@ export class Game {
   getCurrentGameState() {
     const lastMove = this.movements[this.current]
     let currentState: GameState
-    if (!lastMove) {
-      // Beginning of the game
-      currentState = new GameState(this.boardSize, "black")
-    } else {
-      currentState = lastMove.state
-    }
+    currentState = lastMove.state
     return currentState
   }
 

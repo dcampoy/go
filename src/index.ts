@@ -72,6 +72,7 @@ function render(
   hoverStone: {
     pos: Position | null
     isValidMove: boolean
+    colour: "black" | "white"
   }
 ) {
   const gameState = game.getCurrentGameState()
@@ -79,7 +80,7 @@ function render(
   const renderFingerprint =
     gameState.fingerPrint() +
     (hoverStone
-      ? `${hoverStone.pos.x}.${hoverStone.pos.y} ${hoverStone.isValidMove}`
+      ? `${hoverStone.pos.x}.${hoverStone.pos.y} ${hoverStone.isValidMove} ${hoverStone.colour}`
       : "")
 
   if (lastRenderFingerPrint === renderFingerprint) return
@@ -121,7 +122,7 @@ function render(
 
   if (hoverStone) {
     if (hoverStone.isValidMove) {
-      renderStone(drawingState, gameState.turn, hoverStone.pos, true, null)
+      renderStone(drawingState, hoverStone.colour, hoverStone.pos, true, null)
     }
   }
 }
@@ -134,8 +135,13 @@ if (!root) {
 
 init(root).then(([drawingState, canvas]) => {
   const game = new Game(board)
+  let lastPos: Position | null = null
 
   canvas.addEventListener("mousemove", (ev) => {
+    const isMac = navigator.userAgent.includes("Mac")
+    const isEditing = isMac ? ev.metaKey : ev.ctrlKey
+    const isShift = ev.shiftKey
+
     const pos = {
       x: Math.floor((ev.offsetX - unit / 2) / unit),
       y: Math.floor((ev.offsetY - unit / 2) / unit),
@@ -147,19 +153,34 @@ init(root).then(([drawingState, canvas]) => {
 
     const isValidMove = game.getCurrentGameState().isValidMove(pos, game)
 
-    render(drawingState, game, { pos, isValidMove })
+    let colour = game.getCurrentGameState().turn
+
+    if (isEditing) {
+      if (isShift) {
+        colour = "white"
+      } else {
+        colour = "black"
+      }
+    }
+
+    render(drawingState, game, { pos, isValidMove, colour })
+    lastPos = pos
   })
 
   // Controller
   canvas.addEventListener("click", (ev) => {
+    const isMac = navigator.userAgent.includes("Mac")
+    const isEditing = isMac ? ev.metaKey : ev.ctrlKey
+    const isShift = ev.shiftKey
+
     const pos = {
       x: Math.floor((ev.offsetX - unit / 2) / unit),
       y: Math.floor((ev.offsetY - unit / 2) / unit),
     }
-    // @ts-ignore
-    if (window.edit && window.color) {
-      // @ts-ignore
-      gameState.set(pos, window.color as "black" | "white")
+
+    if (isEditing) {
+      game.getCurrentGameState().set(pos, isShift ? "white" : "black")
+      render(drawingState, game, null)
       return
     }
 
@@ -170,6 +191,35 @@ init(root).then(([drawingState, canvas]) => {
     game.registerMove(pos)
 
     render(drawingState, game, null)
+    lastPos = null
+  })
+
+  window.addEventListener("keydown", (ev) => {
+    const isMac = navigator.userAgent.includes("Mac")
+    const isEditing = isMac ? ev.metaKey : ev.ctrlKey
+    const isShift = ev.shiftKey
+
+    if (isEditing && lastPos) {
+      render(drawingState, game, {
+        pos: lastPos,
+        isValidMove: true,
+        colour: isShift ? "white" : "black",
+      })
+    }
+  })
+
+  window.addEventListener("keyup", (ev) => {
+    const isMac = navigator.userAgent.includes("Mac")
+    const isEditing = isMac ? ev.metaKey : ev.ctrlKey
+    const isShift = ev.shiftKey
+
+    if (isEditing && lastPos) {
+      render(drawingState, game, {
+        pos: lastPos,
+        isValidMove: true,
+        colour: isShift ? "white" : "black",
+      })
+    }
   })
 
   window.addEventListener("keyup", (ev) => {
