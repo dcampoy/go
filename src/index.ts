@@ -10,6 +10,7 @@ import {
   unit,
 } from "./ui/board"
 import { drawStone, renderStone } from "./ui/stones"
+import { drawHelp as drawHelp, hideOverlay } from "./ui/overlay"
 
 export type DrawingState = {
   readonly ctx: CanvasRenderingContext2D
@@ -22,7 +23,7 @@ export type DrawingState = {
 
 async function init(
   rootNode: Element
-): Promise<[DrawingState, HTMLCanvasElement]> {
+): Promise<[DrawingState, HTMLCanvasElement, HTMLDivElement]> {
   const canvas = document.createElement("canvas")
   const ctx = canvas.getContext("2d")
 
@@ -51,6 +52,22 @@ async function init(
   canvas.setAttribute("height", `${boardSize}px`)
 
   rootNode.appendChild(canvas)
+
+  const overlay = document.createElement("div")
+  overlay.style.display = "none"
+  overlay.style.position = "absolute"
+  overlay.style.top = "0"
+  overlay.style.left = "0"
+  overlay.style.width = "100%"
+  overlay.style.height = "100%"
+  overlay.style.backgroundColor = "rgba(0,0,0,0.5)"
+  overlay.style.alignItems = "center"
+  overlay.style.justifyContent = "center"
+  overlay.addEventListener("click", () => {
+    overlay.style.display = "none"
+  })
+  rootNode.appendChild(overlay)
+
   return [
     {
       ctx,
@@ -61,6 +78,7 @@ async function init(
       },
     },
     canvas,
+    overlay,
   ]
 }
 
@@ -133,7 +151,7 @@ if (!root) {
   throw new Error("Invalid root element")
 }
 
-init(root).then(([drawingState, canvas]) => {
+init(root).then(([drawingState, canvas, overlay]) => {
   const game = new Game(board)
   let lastPos: Position | null = null
 
@@ -210,14 +228,17 @@ init(root).then(([drawingState, canvas]) => {
 
   window.addEventListener("keyup", (ev) => {
     const isMac = navigator.userAgent.includes("Mac")
-    const isEditing = isMac ? ev.metaKey : ev.ctrlKey
-    const isShift = ev.shiftKey
+    const wasEditing = isMac ? ev.metaKey : ev.ctrlKey
 
-    if (isEditing && lastPos) {
+    console.log(lastPos)
+    if (wasEditing && lastPos) {
+      const isValidMove = game.getCurrentGameState().isValidMove(lastPos, game)
+      let colour = game.getCurrentGameState().turn
+
       render(drawingState, game, {
         pos: lastPos,
-        isValidMove: true,
-        colour: isShift ? "white" : "black",
+        isValidMove,
+        colour,
       })
     }
   })
@@ -244,6 +265,18 @@ init(root).then(([drawingState, canvas]) => {
     if (ev.code === "ArrowRight") {
       game.redo()
       render(drawingState, game, null)
+    }
+
+    if (ev.key === "F1" || ev.key === "?") {
+      if (overlay.style.display !== "none") {
+        hideOverlay(overlay)
+      } else {
+        drawHelp(overlay)
+      }
+    }
+
+    if (ev.key === "Escape" && overlay.style.display !== "none") {
+      hideOverlay(overlay)
     }
   })
 
